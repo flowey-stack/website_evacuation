@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>末日準備者：避難包大挑戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .item-card {
+            transition: all 0.2s;
+        }
+        .item-card:hover {
+            transform: translateY(-2px);
+        }
+        .item-card.selected {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .item-card.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div id="game-container" class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- 第一階段：超市籌備 -->
+        <div id="phase1" class="fade-in">
+            <h1 class="text-4xl font-bold text-center mb-8 text-yellow-400">末日準備者：避難包大挑戰</h1>
+            
+            <div class="bg-gray-800 rounded-lg p-6 mb-6 shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-semibold">超市籌備階段</h2>
+                    <div class="text-xl space-y-1">
+                        <div>
+                            <span class="text-gray-400">剩餘資金：</span>
+                            <span id="budget" class="text-yellow-400 font-bold">$4000</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400">總負重：</span>
+                            <span id="total-weight" class="font-bold">0</span>
+                            <span class="text-gray-400 text-sm">kg</span>
+                            <span id="weight-warning" class="text-red-400 text-sm ml-2 hidden">⚠️ 負重過高！</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-gray-300 mb-4">你有 $10000 的預算，請選擇必要的避難物品。注意：物品體積大，帶太多會降低移動速度！</p>
+            </div>
+
+            <div class="bg-gray-800 rounded-lg p-6 mb-6 shadow-lg">
+                <h3 class="text-xl font-semibold mb-4">可選物品</h3>
+                <div class="mb-4">
+                    <h4 class="text-lg font-semibold text-yellow-400 mb-2">🟡 隨身類（體積小，決定前24小時存活率）</h4>
+                    <div id="portable-items" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <!-- 隨身類物品將由 JavaScript 動態生成 -->
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <h4 class="text-lg font-semibold text-green-400 mb-2">🟢 身分證件</h4>
+                    <div id="document-items" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <!-- 身分證件將由 JavaScript 動態生成 -->
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-lg font-semibold text-red-400 mb-2">🔴 居家儲備類</h4>
+                    <div id="home-items" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- 居家儲備類物品將由 JavaScript 動態生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 rounded-lg p-6 mb-6 shadow-lg">
+                <h3 class="text-xl font-semibold mb-4">避難包清單</h3>
+                <div id="backpack-list" class="min-h-[100px]">
+                    <p class="text-gray-400 italic">尚未選擇任何物品</p>
+                </div>
+                <div class="mt-4 pt-4 border-t border-gray-700">
+                    <div class="flex justify-between items-center">
+                        <span class="text-lg">總花費：</span>
+                        <span id="total-cost" class="text-xl font-bold text-yellow-400">$0</span>
+                    </div>
+                </div>
+            </div>
+
+            <button id="start-btn" class="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg">
+                準備好了，出發！
+            </button>
+        </div>
+
+        <!-- 第二階段：災難發生與生存模擬 -->
+        <div id="phase2" class="hidden fade-in">
+            <h1 class="text-4xl font-bold text-center mb-8 text-red-400">災難發生</h1>
+            
+            <div class="bg-gray-800 rounded-lg p-6 mb-6 shadow-lg">
+                <p class="text-lg mb-4">強烈地震襲來！建築物劇烈搖晃，停電、掉落物四處飛散。你必須立即逃離，而你的避難包將決定你的命運...</p>
+            </div>
+
+            <div id="survival-checks" class="space-y-4 mb-6">
+                <!-- 生存判定結果將顯示在這裡 -->
+            </div>
+
+            <div id="final-result" class="bg-gray-800 rounded-lg p-6 shadow-lg hidden">
+                <!-- 最終結局將顯示在這裡 -->
+            </div>
+
+            <button id="replay-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg mt-6 hidden">
+                重新開始
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 遊戲狀態
+        let budget = 10000;
+        let selectedItems = [];
+        let totalCost = 0;
+        let totalWeight = 0;
+
+        // 物品清單（包含負重值和分類）
+        // category: 'portable'=隨身類, 'home'=居家儲備類, 'document'=身分證件
+        const items = [
+            // 隨身類物品（體積小，決定前24小時存活率）
+            { id: 'helmet', name: '頭盔（折疊式）', price: 350, weight: 2, category: 'portable', phase: 'emergency' },
+            { id: 'headlamp', name: '頭燈', price: 200, weight: 1, category: 'portable', phase: 'emergency' },
+            { id: 'whistle', name: '救難哨', price: 50, weight: 0.1, category: 'portable', phase: 'emergency' },
+            { id: 'powerbank', name: '行動電源（乾電池型）', price: 400, weight: 1.5, category: 'portable', phase: 'emergency' },
+            { id: 'portable_toilet', name: '攜帶式廁所', price: 300, weight: 2, category: 'portable', phase: 'emergency' },
+            { id: 'water_500ml', name: '水（500ml x2）', price: 100, weight: 1.5, category: 'portable', phase: 'emergency' },
+            { id: 'raincoat', name: '雨衣', price: 150, weight: 0.5, category: 'portable', phase: 'emergency' },
+            { id: 'towel', name: '毛巾', price: 80, weight: 0.3, category: 'portable', phase: 'emergency' },
+            { id: 'mask', name: '口罩', price: 50, weight: 0.1, category: 'portable', phase: 'emergency' },
+            { id: 'jelly_drink', name: '果凍飲料', price: 120, weight: 0.5, category: 'portable', phase: 'emergency' },
+            { id: 'firstaid', name: '急救用品', price: 400, weight: 1, category: 'portable', phase: 'emergency' },
+            { id: 'water_bag', name: '儲水袋', price: 200, weight: 0.5, category: 'portable', phase: 'emergency' },
+            { id: 'batteries', name: '乾電池', price: 100, weight: 0.3, category: 'portable', phase: 'emergency' },
+            { id: 'life_straw', name: '生命吸管', price: 450, weight: 0.12, category: 'portable', phase: 'emergency' },
+            { id: 'emergency_rations', name: '戰備乾糧（3日份）', price: 650, weight: 0.9, category: 'portable', phase: 'emergency' },
+            { id: 'radio', name: '收音機', price: 610, weight: 0.5, category: 'portable', phase: 'emergency' },
+            { id: 'flashlight_aa', name: '手電筒（AA電池）', price: 750, weight: 0.15, category: 'portable', phase: 'emergency' },
+            { id: 'gloves', name: '工作手套', price: 140, weight: 0.2, category: 'portable', phase: 'emergency' },
+            { id: 'helmet_standard', name: '安全頭盔', price: 800, weight: 0.5, category: 'portable', phase: 'emergency' },
+            { id: 'walkie_talkie', name: '對講機', price: 400, weight: 0.3, category: 'portable', phase: 'emergency' },
+            { id: 'emergency_blanket', name: '鋁箔避難毯', price: 75, weight: 0.3, category: 'portable', phase: 'emergency' },
+            { id: 'steel_cup', name: '鋼杯', price: 120, weight: 0.4, category: 'portable', phase: 'emergency' },
+            { id: 'cash', name: '小額現金', price: 1000, weight: 0.1, category: 'portable', phase: 'emergency' },
+            { id: 'toilet_paper', name: '衛生紙', price: 80, weight: 0.3, category: 'portable', phase: 'emergency' },
+            { id: 'sanitary_pads', name: '衛生棉', price: 100, weight: 0.2, category: 'portable', phase: 'emergency' },
+            { id: 'thermometer', name: '體溫計', price: 150, weight: 0.05, category: 'portable', phase: 'emergency' },
+            { id: 'alcohol_cotton', name: '酒精、棉片', price: 100, weight: 0.2, category: 'portable', phase: 'emergency' },
+            { id: 'saline', name: '生理食鹽水', price: 70, weight: 0.3, category: 'portable', phase: 'emergency' },
+            { id: 'bandage_kit', name: '紗布、彈性繃帶組', price: 150, weight: 0.3, category: 'portable', phase: 'emergency' },
+            { id: 'tourniquet', name: '止血帶', price: 200, weight: 0.2, category: 'portable', phase: 'emergency' },
+            { id: 'topical_ointment', name: '外用藥膏組（白藥水、燙傷膏、防蚊液）', price: 200, weight: 0.05, category: 'portable', phase: 'emergency' },
+            { id: 'anxiety_med', name: '抗焦慮藥物', price: 100, weight: 0.01, category: 'portable', phase: 'emergency' },
+            { id: 'pain_reliever', name: '止痛退燒藥（普拿疼）', price: 80, weight: 0.05, category: 'portable', phase: 'emergency' },
+            { id: 'stomach_med', name: '腸胃藥（止瀉、胃藥）', price: 100, weight: 0.05, category: 'portable', phase: 'emergency' },
+            { id: 'cold_med', name: '感冒藥（止咳化痰）', price: 90, weight: 0.05, category: 'portable', phase: 'emergency' },
+            { id: 'foldable_water_bag', name: '摺疊水袋（5L）', price: 105, weight: 0.2, category: 'portable', phase: 'emergency' },
+            { id: 'hand_warmers', name: '暖暖包', price: 50, weight: 0.1, category: 'portable', phase: 'emergency' },
+            { id: 'water_purification', name: '淨水錠', price: 80, weight: 0.1, category: 'portable', phase: 'emergency' },
+            { id: 'pepper_spray', name: '辣椒水（鑰匙圈型）', price: 550, weight: 0.1, category: 'portable', phase: 'emergency' },
+            { id: 'urine_coagulant', name: '尿液凝固劑', price: 100, weight: 0.2, category: 'portable', phase: 'emergency' },
+            // 無關緊要的物品（混在隨身類中）
+            { id: 'novel', name: '小說', price: 150, weight: 0.5, category: 'portable', phase: 'emergency', isUseless: true },
+            { id: 'makeup_kit', name: '化妝品組', price: 500, weight: 1.2, category: 'portable', phase: 'emergency', isUseless: true },
+            { id: 'portable_speaker', name: '藍牙喇叭', price: 350, weight: 0.8, category: 'portable', phase: 'emergency', isUseless: true },
+            
+            // 身分證件
+            { id: 'idcopy', name: '影印身分證', price: 10, weight: 0.1, category: 'document', phase: 'emergency' },
+            
+            // 居家儲備類（體積大，帶太多會降低移動速度）
+            { id: 'longterm_food', name: '長期保存食品（1週份）', price: 800, weight: 8, category: 'home', phase: 'shelter' },
+            { id: 'gas_stove', name: '卡式爐', price: 350, weight: 3, category: 'home', phase: 'shelter' },
+            { id: 'gas_canister', name: '瓦斯罐', price: 150, weight: 1.5, category: 'home', phase: 'shelter' },
+            { id: 'wet_wipes', name: '濕紙巾', price: 100, weight: 2, category: 'home', phase: 'shelter' },
+            { id: 'mouthwash', name: '漱口水', price: 120, weight: 0.8, category: 'home', phase: 'shelter' },
+            { id: 'eye_mask', name: '眼罩', price: 80, weight: 0.1, category: 'home', phase: 'shelter' },
+            { id: 'earplugs', name: '耳塞', price: 60, weight: 0.1, category: 'home', phase: 'shelter' },
+            { id: 'drinks_week', name: '飲料（1週份）', price: 500, weight: 6, category: 'home', phase: 'shelter' },
+            // 無關緊要的物品（混在居家儲備類中）
+            { id: 'decorative_light', name: '裝飾LED燈串', price: 250, weight: 1.5, category: 'home', phase: 'shelter', isUseless: true },
+            { id: 'board_game', name: '桌遊', price: 400, weight: 2.5, category: 'home', phase: 'shelter', isUseless: true },
+            { id: 'fancy_cutlery', name: '精美餐具組', price: 300, weight: 1.8, category: 'home', phase: 'shelter', isUseless: true },
+            { id: 'scented_candle', name: '香氛蠟燭', price: 180, weight: 0.8, category: 'home', phase: 'shelter', isUseless: true },
+            { id: 'fancy_blanket', name: '高級毛毯', price: 600, weight: 3, category: 'home', phase: 'shelter', isUseless: true }
+        ];
+
+        // 初始化
+        function init() {
+            renderItems();
+            updateUI();
+            
+            document.getElementById('start-btn').addEventListener('click', startPhase2);
+            document.getElementById('replay-btn').addEventListener('click', replay);
+        }
+
+        // 渲染物品清單
+        function renderItems() {
+            const portableList = document.getElementById('portable-items');
+            const documentList = document.getElementById('document-items');
+            const homeList = document.getElementById('home-items');
+            portableList.innerHTML = '';
+            documentList.innerHTML = '';
+            homeList.innerHTML = '';
+            
+            items.forEach(item => {
+                const isSelected = selectedItems.includes(item.id);
+                const canAfford = budget >= item.price;
+                
+                const itemCard = document.createElement('div');
+                itemCard.className = `item-card bg-gray-700 rounded-lg p-4 cursor-pointer ${isSelected ? 'selected' : ''} ${!canAfford && !isSelected ? 'disabled' : ''}`;
+                itemCard.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h4 class="font-semibold">${item.name}</h4>
+                            <p class="text-sm text-gray-400 mt-1">
+                                $${item.price} 
+                                <span class="text-blue-400">• ${item.weight}kg</span>
+                            </p>
+                        </div>
+                        ${isSelected ? '<span class="text-green-400">✓ 已選</span>' : ''}
+                    </div>
+                `;
+                
+                if (canAfford || isSelected) {
+                    itemCard.addEventListener('click', () => toggleItem(item));
+                }
+                
+                if (item.category === 'portable') {
+                    portableList.appendChild(itemCard);
+                } else if (item.category === 'document') {
+                    documentList.appendChild(itemCard);
+                } else if (item.category === 'home') {
+                    homeList.appendChild(itemCard);
+                }
+            });
+        }
+
+        // 切換物品選擇
+        function toggleItem(item) {
+            const index = selectedItems.indexOf(item.id);
+            
+            if (index > -1) {
+                // 移除物品
+                selectedItems.splice(index, 1);
+                totalCost -= item.price;
+                // 只有非居家儲備類的物品才計算負重
+                if (item.category !== 'home') {
+                    totalWeight -= item.weight;
+                }
+                budget += item.price;
+            } else {
+                // 添加物品
+                if (budget >= item.price) {
+                    selectedItems.push(item.id);
+                    totalCost += item.price;
+                    // 只有非居家儲備類的物品才計算負重
+                    if (item.category !== 'home') {
+                        totalWeight += item.weight;
+                    }
+                    budget -= item.price;
+                }
+            }
+            
+            updateUI();
+            renderItems();
+        }
+
+        // 更新 UI
+        function updateUI() {
+            document.getElementById('budget').textContent = `$${budget}`;
+            document.getElementById('total-cost').textContent = `$${totalCost}`;
+            
+            // 重新計算總負重（排除居家儲備類）
+            const currentWeight = selectedItems.reduce((sum, id) => {
+                const item = items.find(i => i.id === id);
+                return sum + (item && item.category !== 'home' ? item.weight : 0);
+            }, 0);
+            totalWeight = currentWeight;
+            
+            document.getElementById('total-weight').textContent = totalWeight.toFixed(1);
+            
+            // 負重警告（超過15kg會影響移動速度，只計算隨身類和身分證件）
+            const weightWarning = document.getElementById('weight-warning');
+            if (totalWeight > 15) {
+                weightWarning.classList.remove('hidden');
+                document.getElementById('total-weight').classList.add('text-red-400');
+            } else {
+                weightWarning.classList.add('hidden');
+                document.getElementById('total-weight').classList.remove('text-red-400');
+            }
+            
+            const backpackList = document.getElementById('backpack-list');
+            if (selectedItems.length === 0) {
+                backpackList.innerHTML = '<p class="text-gray-400 italic">尚未選擇任何物品</p>';
+            } else {
+                // 按分類顯示
+                const portableItems = selectedItems.filter(id => {
+                    const item = items.find(i => i.id === id);
+                    return item && item.category === 'portable';
+                });
+                const documentItems = selectedItems.filter(id => {
+                    const item = items.find(i => i.id === id);
+                    return item && item.category === 'document';
+                });
+                const homeItems = selectedItems.filter(id => {
+                    const item = items.find(i => i.id === id);
+                    return item && item.category === 'home';
+                });
+                
+                let html = '';
+                if (portableItems.length > 0) {
+                    html += '<div class="mb-3"><span class="text-yellow-400 font-semibold">🟡 隨身類：</span>';
+                    html += portableItems.map(itemId => {
+                        const item = items.find(i => i.id === itemId);
+                        return `<span class="bg-gray-700 rounded px-2 py-1 mr-2 mb-2 inline-block">${item.name} (${item.weight}kg)</span>`;
+                    }).join('');
+                    html += '</div>';
+                }
+                if (documentItems.length > 0) {
+                    html += '<div class="mb-3"><span class="text-green-400 font-semibold">🟢 身分證件：</span>';
+                    html += documentItems.map(itemId => {
+                        const item = items.find(i => i.id === itemId);
+                        return `<span class="bg-gray-700 rounded px-2 py-1 mr-2 mb-2 inline-block">${item.name} (${item.weight}kg)</span>`;
+                    }).join('');
+                    html += '</div>';
+                }
+                if (homeItems.length > 0) {
+                    html += '<div class="mb-3"><span class="text-red-400 font-semibold">🔴 居家儲備類：</span>';
+                    html += homeItems.map(itemId => {
+                        const item = items.find(i => i.id === itemId);
+                        return `<span class="bg-gray-700 rounded px-2 py-1 mr-2 mb-2 inline-block">${item.name} (${item.weight}kg)</span>`;
+                    }).join('');
+                    html += '</div>';
+                }
+                backpackList.innerHTML = html;
+            }
+            
+            // 更新按鈕狀態
+            document.getElementById('start-btn').disabled = selectedItems.length === 0;
+        }
+
+        // 開始第二階段
+        function startPhase2() {
+            document.getElementById('phase1').classList.add('hidden');
+            document.getElementById('phase2').classList.remove('hidden');
+            
+            runSurvivalChecks();
+        }
+
+        // 執行生存判定
+        function runSurvivalChecks() {
+            const checksDiv = document.getElementById('survival-checks');
+            checksDiv.innerHTML = '';
+            
+            let survivalDays = 7; // 基礎生存天數
+            const messages = [];
+            
+            // 計算負重影響（只計算隨身類和身分證件，排除居家儲備類）
+            const portableWeight = selectedItems.reduce((sum, id) => {
+                const item = items.find(i => i.id === id);
+                return sum + (item && item.category !== 'home' ? item.weight : 0);
+            }, 0);
+            
+            if (portableWeight > 15) {
+                messages.push({
+                    type: 'danger',
+                    text: `你背負了 ${portableWeight.toFixed(1)}kg 的隨身物品，負重過高導致移動速度大幅下降，在逃難過程中消耗了過多體力。`,
+                    phase: 0
+                });
+                survivalDays -= 2;
+            }
+            
+            // 檢查居家儲備類物品（如果完全沒有，生存天數從7天掉到2天，排除無關緊要的物品）
+            const homeItems = selectedItems.filter(id => {
+                const item = items.find(i => i.id === id);
+                return item && item.category === 'home' && !item.isUseless;
+            });
+            if (homeItems.length === 0) {
+                messages.push({
+                    type: 'danger',
+                    text: '你完全沒有準備居家儲備類物品，在避難所中缺乏基本生活物資，生存變得極其困難。',
+                    phase: 0
+                });
+                survivalDays = 2; // 從7天掉到2天
+            }
+            
+            // ========== 第一階段：緊急避難階段（前24小時，隨身類物品決定存活率） ==========
+            const phase1Div = document.createElement('div');
+            phase1Div.className = 'bg-red-900/30 rounded-lg p-4 mb-4 border border-red-700';
+            phase1Div.innerHTML = '<h3 class="text-xl font-bold text-red-400 mb-3">🔴 緊急避難階段（前24小時，隨身類物品決定存活率）</h3>';
+            checksDiv.appendChild(phase1Div);
+            
+            // 檢查隨身類物品是否足夠（決定前24小時存活率，排除無關緊要的物品）
+            const portableItems = selectedItems.filter(id => {
+                const item = items.find(i => i.id === id);
+                return item && item.category === 'portable' && !item.isUseless;
+            });
+            
+            if (portableItems.length < 3) {
+                messages.push({
+                    type: 'danger',
+                    text: '你的隨身類物品準備不足，在災難發生後的前24小時內面臨極大危險。',
+                    phase: 1
+                });
+                survivalDays -= 3;
+            }
+            
+            // 檢查頭盔/頭燈
+            const hasHelmet = selectedItems.includes('helmet');
+            const hasHeadlamp = selectedItems.includes('headlamp');
+            if (!hasHelmet && !hasHeadlamp) {
+                messages.push({
+                    type: 'danger',
+                    text: '地震後停電且有掉落物，你在黑暗中摸索時被砸傷，行動力下降。',
+                    phase: 1
+                });
+                survivalDays -= 2;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: hasHelmet ? '頭盔保護了你的頭部，頭燈讓你在黑暗中安全移動。' : '頭燈讓你在黑暗中保持視野，安全逃離危險區域。',
+                    phase: 1
+                });
+            }
+            
+            // 檢查哨子
+            if (!selectedItems.includes('whistle')) {
+                messages.push({
+                    type: 'danger',
+                    text: '你受困在倒塌的貨架下，大聲呼喊卻沒人聽見，白白耗費體力。',
+                    phase: 1
+                });
+                survivalDays -= 1;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: '救難哨的聲音穿透廢墟，救援人員迅速找到你的位置。',
+                    phase: 1
+                });
+            }
+            
+            // 檢查行動電源
+            if (!selectedItems.includes('powerbank')) {
+                messages.push({
+                    type: 'danger',
+                    text: '手機沒電了，你無法接收防災警報，也無法聯繫家人。',
+                    phase: 1
+                });
+                survivalDays -= 1;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: '行動電源讓你的手機保持運作，及時收到重要資訊並聯繫家人。',
+                    phase: 1
+                });
+            }
+            
+            // 檢查攜帶式廁所
+            if (!selectedItems.includes('portable_toilet')) {
+                messages.push({
+                    type: 'danger',
+                    text: '避難所廁所大排長龍且衛生惡劣，你憋尿導致身體不適。',
+                    phase: 1
+                });
+                survivalDays -= 1;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: '攜帶式廁所讓你在避難所保持基本衛生，避免感染風險。',
+                    phase: 1
+                });
+            }
+            
+            // 檢查水（500ml）或生命吸管
+            const hasWater = selectedItems.includes('water_500ml') || selectedItems.includes('foldable_water_bag');
+            const hasLifeStraw = selectedItems.includes('life_straw');
+            if (!hasWater && !hasLifeStraw) {
+                messages.push({
+                    type: 'danger',
+                    text: '逃難路程中感到極度乾渴，你的專注力開始渙散。',
+                    phase: 1
+                });
+                survivalDays -= 2;
+            } else {
+                if (hasLifeStraw) {
+                    messages.push({
+                        type: 'success',
+                        text: '生命吸管讓你能從各種水源獲取乾淨的飲用水，大大提升了生存能力。',
+                        phase: 1
+                    });
+                    survivalDays += 1;
+                } else {
+                    messages.push({
+                        type: 'success',
+                        text: '充足的水分讓你在逃難過程中保持清醒和體力。',
+                        phase: 1
+                    });
+                }
+            }
+            
+            // 檢查戰備乾糧
+            if (selectedItems.includes('emergency_rations')) {
+                messages.push({
+                    type: 'success',
+                    text: '戰備乾糧提供了緊急時期的能量補充，讓你在前24小時保持體力。',
+                    phase: 1
+                });
+                survivalDays += 1;
+            }
+            
+            // 檢查收音機
+            if (selectedItems.includes('radio')) {
+                messages.push({
+                    type: 'success',
+                    text: '收音機讓你及時接收災情資訊和政府公告，掌握救援時機。',
+                    phase: 1
+                });
+                survivalDays += 1;
+            }
+            
+            // 檢查對講機
+            if (selectedItems.includes('walkie_talkie')) {
+                messages.push({
+                    type: 'info',
+                    text: '對講機讓你能與同行者保持聯繫，在混亂中不會走散。',
+                    phase: 1
+                });
+            }
+            
+            // 檢查手套
+            if (selectedItems.includes('gloves')) {
+                messages.push({
+                    type: 'success',
+                    text: '工作手套保護你的雙手，在清理廢墟時避免受傷。',
+                    phase: 1
+                });
+            }
+            
+            // 檢查鋁箔避難毯
+            if (selectedItems.includes('emergency_blanket')) {
+                messages.push({
+                    type: 'success',
+                    text: '鋁箔避難毯幫助你保持體溫，在寒冷環境中避免失溫。',
+                    phase: 1
+                });
+                survivalDays += 1;
+            }
+            
+            // 檢查暖暖包
+            if (selectedItems.includes('hand_warmers')) {
+                messages.push({
+                    type: 'info',
+                    text: '暖暖包在寒冷夜晚提供了額外的溫暖。',
+                    phase: 2
+                });
+            }
+            
+            // 檢查淨水錠
+            if (selectedItems.includes('water_purification')) {
+                messages.push({
+                    type: 'success',
+                    text: '淨水錠讓你能處理不乾淨的水源，增加了飲水選擇。',
+                    phase: 1
+                });
+            }
+            
+            // 檢查止血帶
+            if (selectedItems.includes('tourniquet')) {
+                messages.push({
+                    type: 'success',
+                    text: '止血帶在嚴重外傷時能快速止血，可能救了你的命。',
+                    phase: 1
+                });
+                survivalDays += 2;
+            }
+            
+            // 檢查藥品
+            const hasMedicine = selectedItems.includes('pain_reliever') || 
+                               selectedItems.includes('stomach_med') || 
+                               selectedItems.includes('cold_med') ||
+                               selectedItems.includes('anxiety_med');
+            if (hasMedicine) {
+                messages.push({
+                    type: 'success',
+                    text: '準備的藥品幫助你處理了各種突發的健康問題，避免了病情惡化。',
+                    phase: 2
+                });
+                survivalDays += 1;
+            }
+            
+            // 檢查衛生用品
+            if (selectedItems.includes('toilet_paper') || selectedItems.includes('sanitary_pads')) {
+                messages.push({
+                    type: 'info',
+                    text: '衛生用品讓你在避難所中保持基本衛生。',
+                    phase: 2
+                });
+            }
+            
+            // ========== 第二階段：避難生活階段（受困 3~7 天，居家儲備類決定舒適度） ==========
+            const phase2Div = document.createElement('div');
+            phase2Div.className = 'bg-blue-900/30 rounded-lg p-4 mb-4 border border-blue-700';
+            phase2Div.innerHTML = '<h3 class="text-xl font-bold text-blue-400 mb-3 mt-4">🟢 避難生活階段（受困 3~7 天，居家儲備類決定舒適度）</h3>';
+            checksDiv.appendChild(phase2Div);
+            
+            // 檢查長期保存食品（居家儲備類）
+            if (!selectedItems.includes('longterm_food')) {
+                messages.push({
+                    type: 'danger',
+                    text: '便利商店被搶購一空，你只能依靠微薄的政府發放糧食維生，撐不到一週。',
+                    phase: 2
+                });
+                survivalDays -= 3;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: '充足的長期保存食品讓你度過了最困難的時期，體力得以維持。',
+                    phase: 2
+                });
+                survivalDays += 2;
+            }
+            
+            // 檢查卡式爐/瓦斯罐
+            const hasStove = selectedItems.includes('gas_stove');
+            const hasCanister = selectedItems.includes('gas_canister');
+            if (!hasStove || !hasCanister) {
+                messages.push({
+                    type: 'danger',
+                    text: '無法加熱食物，寒冷的夜裡你只能吃冷冰冰的罐頭，心情變得非常沮喪。',
+                    phase: 2
+                });
+                survivalDays -= 2;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: '卡式爐讓你吃到熱騰騰的食物，在寒冷的避難所中維持了溫暖。',
+                    phase: 2
+                });
+                survivalDays += 1;
+            }
+            
+            // 檢查濕紙巾/漱口水
+            const hasWetWipes = selectedItems.includes('wet_wipes');
+            const hasMouthwash = selectedItems.includes('mouthwash');
+            if (!hasWetWipes && !hasMouthwash) {
+                messages.push({
+                    type: 'danger',
+                    text: '缺水無法洗澡刷牙，你感到渾身黏膩，甚至開始出現皮膚過敏。',
+                    phase: 2
+                });
+                survivalDays -= 1;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: '濕紙巾和漱口水讓你在缺水環境中保持基本清潔，避免健康問題。',
+                    phase: 2
+                });
+            }
+            
+            // 檢查眼罩/耳塞
+            const hasEyeMask = selectedItems.includes('eye_mask');
+            const hasEarplugs = selectedItems.includes('earplugs');
+            if (!hasEyeMask && !hasEarplugs) {
+                messages.push({
+                    type: 'danger',
+                    text: '避難所人聲鼎沸、燈火通明，你連續幾晚失眠，體力透支。',
+                    phase: 2
+                });
+                survivalDays -= 2;
+            } else {
+                messages.push({
+                    type: 'success',
+                    text: '眼罩和耳塞讓你在吵雜的避難所中獲得休息，恢復體力。',
+                    phase: 2
+                });
+                survivalDays += 1;
+            }
+            
+            // 檢查其他有用物品
+            if (selectedItems.includes('firstaid')) {
+                messages.push({
+                    type: 'success',
+                    text: '急救用品幫助你處理了意外傷口，避免了感染。',
+                    phase: 2
+                });
+                survivalDays += 1;
+            }
+            
+            if (selectedItems.includes('raincoat')) {
+                messages.push({
+                    type: 'info',
+                    text: '雨衣讓你在惡劣天氣中保持乾燥。',
+                    phase: 2
+                });
+            }
+            
+            // 檢查無關緊要的物品（浪費預算和負重，只計算隨身類的負重）
+            const uselessItems = selectedItems.filter(id => {
+                const item = items.find(i => i.id === id);
+                return item && item.isUseless === true;
+            });
+            if (uselessItems.length > 0) {
+                const uselessCost = uselessItems.reduce((sum, id) => {
+                    const item = items.find(i => i.id === id);
+                    return sum + (item ? item.price : 0);
+                }, 0);
+                const uselessWeight = uselessItems.reduce((sum, id) => {
+                    const item = items.find(i => i.id === id);
+                    // 只計算非居家儲備類的負重
+                    return sum + (item && item.category !== 'home' ? item.weight : 0);
+                }, 0);
+                
+                if (uselessWeight > 0) {
+                    messages.push({
+                        type: 'warning',
+                        text: `你帶了一些無關緊要的物品（如裝飾品、娛樂用品等），浪費了 $${uselessCost} 的預算和 ${uselessWeight.toFixed(1)}kg 的負重，這些物品在災難中毫無用處。`,
+                        phase: 2
+                    });
+                } else {
+                    messages.push({
+                        type: 'warning',
+                        text: `你帶了一些無關緊要的物品（如裝飾品、娛樂用品等），浪費了 $${uselessCost} 的預算，這些物品在災難中毫無用處。`,
+                        phase: 2
+                    });
+                }
+            }
+             
+            // 確保生存天數在合理範圍內
+            survivalDays = Math.max(1, Math.min(14, survivalDays));
+            
+            // 創建初始階段容器（用於負重和居家儲備類檢查）
+            const phase0Div = document.createElement('div');
+            phase0Div.className = 'bg-orange-900/30 rounded-lg p-4 mb-4 border border-orange-700';
+            phase0Div.innerHTML = '<h3 class="text-xl font-bold text-orange-400 mb-3">⚠️ 負重與準備評估</h3>';
+            checksDiv.appendChild(phase0Div);
+            
+            // 顯示判定結果
+            let messageIndex = 0;
+            messages.forEach((msg) => {
+                setTimeout(() => {
+                    const msgDiv = document.createElement('div');
+                    let bgColor = 'bg-gray-700';
+                    if (msg.type === 'success') bgColor = 'bg-green-900/50';
+                    if (msg.type === 'danger') bgColor = 'bg-red-900/50';
+                    if (msg.type === 'warning') bgColor = 'bg-yellow-900/50';
+                    if (msg.type === 'info') bgColor = 'bg-blue-900/50';
+                    
+                    msgDiv.className = `${bgColor} rounded-lg p-3 mb-2 fade-in border-l-4 ${
+                        msg.type === 'success' ? 'border-green-400' :
+                        msg.type === 'danger' ? 'border-red-400' :
+                        msg.type === 'warning' ? 'border-yellow-400' : 'border-blue-400'
+                    }`;
+                    msgDiv.textContent = msg.text;
+                    
+                    // 根據階段添加到對應的容器
+                    if (msg.phase === 0) {
+                        phase0Div.appendChild(msgDiv);
+                    } else if (msg.phase === 1) {
+                        phase1Div.appendChild(msgDiv);
+                    } else {
+                        phase2Div.appendChild(msgDiv);
+                    }
+                    
+                    messageIndex++;
+                    // 最後一條訊息後顯示結果
+                    if (messageIndex === messages.length) {
+                        setTimeout(() => {
+                            showFinalResult(survivalDays);
+                        }, 1000);
+                    }
+                }, messageIndex * 600);
+            });
+        }
+
+        // 顯示最終結果
+        function showFinalResult(days) {
+            const resultDiv = document.getElementById('final-result');
+            resultDiv.classList.remove('hidden');
+            
+            let resultText = '';
+            let resultColor = '';
+            
+            if (days >= 10) {
+                resultText = '完美生存！你準備充分，成功度過了災難，並獲得了優先救援。';
+                resultColor = 'text-green-400';
+            } else if (days >= 7) {
+                resultText = '良好表現！你成功生存下來，雖然過程艱辛，但最終等到了救援。';
+                resultColor = 'text-yellow-400';
+            } else if (days >= 4) {
+                resultText = '勉強生存。你活了下來，但因為準備不足而付出了巨大代價，身體狀況不佳。';
+                resultColor = 'text-orange-400';
+            } else {
+                resultText = '生存困難。你勉強活了下來，但因為缺乏關鍵物資，情況非常危急，需要緊急醫療協助。';
+                resultColor = 'text-red-400';
+            }
+            
+            resultDiv.innerHTML = `
+                <h2 class="text-2xl font-bold mb-4">最終結局</h2>
+                <p class="text-lg mb-4">你生存了 <span class="font-bold ${resultColor}">${days} 天</span></p>
+                <p class="text-lg ${resultColor}">${resultText}</p>
+            `;
+            
+            document.getElementById('replay-btn').classList.remove('hidden');
+        }
+
+        // 重新開始
+        function replay() {
+            budget = 4000;
+            selectedItems = [];
+            totalCost = 0;
+            totalWeight = 0;
+            
+            document.getElementById('phase2').classList.add('hidden');
+            document.getElementById('phase1').classList.remove('hidden');
+            document.getElementById('survival-checks').innerHTML = '';
+            document.getElementById('final-result').classList.add('hidden');
+            document.getElementById('final-result').innerHTML = '';
+            document.getElementById('replay-btn').classList.add('hidden');
+            
+            updateUI();
+            renderItems();
+        }
+
+        // 啟動遊戲
+        init();
+    </script>
+</body>
+</html>
+
